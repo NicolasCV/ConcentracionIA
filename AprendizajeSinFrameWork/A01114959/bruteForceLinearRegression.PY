@@ -22,13 +22,13 @@ class bruteForceLinearRegression:
         return (self.m,self.b)
 
     def showData(self):
-        plt.scatter(self.data[['x']], self.data[['y']])
+        plt.scatter(self.data.iloc[:, 0], self.data.iloc[:, 1])
         
         if (self.m and self.b):
             predictions = []
-            for x in self.data[['x']].to_numpy():
-                predictions.append(self.makePrediction(x[0]))
-            plt.plot(self.data[['x']],predictions, '--')
+            for x in self.data.iloc[:, 0].to_numpy():
+                predictions.append(self.makePrediction(x))
+            plt.plot(self.data.iloc[:, 0],predictions, '--')
         
         plt.show()
 
@@ -48,11 +48,11 @@ class bruteForceLinearRegression:
         return covar 
 
     def coefficients(self): 
-        x = self.data[['x']].to_numpy()
-        y = self.data[['y']].to_numpy()
+        x = self.data.iloc[:, 0].to_numpy()
+        y = self.data.iloc[:, 1].to_numpy()
         b1 = self.covariance(x,y) / self.variance(x, self.mean(x)) 
         b0 = self.mean(y) - (b1 * self.mean(x))
-        return [b0[0], b1[0]] 
+        return [b0, b1] 
 
     def numericLinearRegression(self):
         self.b, self.m = self.coefficients()
@@ -62,7 +62,7 @@ class bruteForceLinearRegression:
     
     #BRUTE FORCE LINEAR REGRESSION (NOT ACCURATE)
     def getError(self, m, b, point):
-        x = point[0]
+        x = point
         y = point[1]
         return abs(y - self.evaluateFunction(m, b, x))
 
@@ -74,14 +74,14 @@ class bruteForceLinearRegression:
         return totalSE/len(self.data)
 
     def getSlopeIntervals(self, step):
-        maxSlope = self.getBiggestSlope()[0]
-        range_ = self.getRange()[0]   
+        maxSlope = self.getBiggestSlope()
+        range_ = self.getRange()   
         return list(np.arange(maxSlope - range_, maxSlope + range_, step))
 
     def getInterceptIntervals(self, step):
         multCoefficient = 10
-        lowEndIntercept = -multCoefficient*(max(self.data[['y']].to_numpy())+1)
-        highEndIntercept = multCoefficient*(max(self.data[['y']].to_numpy())+1)
+        lowEndIntercept = -multCoefficient*(max(self.data.iloc[:, 1].to_numpy())+1)
+        highEndIntercept = multCoefficient*(max(self.data.iloc[:, 1].to_numpy())+1)
         return list(np.arange(lowEndIntercept, highEndIntercept, step))
 
 
@@ -92,13 +92,13 @@ class bruteForceLinearRegression:
 
     def getBiggestSlope(self):
         slope = float("-inf")
-        y = self.data[['y']].to_numpy()
+        y = self.data.iloc[:, 1].to_numpy()
         for i in range(1,len(y)):
             slope = max(slope, abs(y[i] - y[i-1]))
         return slope
 
     def getRange(self):
-        y = self.data[['y']].to_numpy()
+        y = self.data.iloc[:, 1].to_numpy()
         return abs(max(y) - min(y))
 
     def manualRegression(self, step):
