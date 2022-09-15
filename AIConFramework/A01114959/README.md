@@ -97,25 +97,25 @@ for col in data.columns.tolist()[0:-1]:
 
 
     
-![png](images/images/output_9_0.png)
+![png](images/output_9_0.png)
     
 
 
 
     
-![png](images/images/output_9_1.png)
+![png](images/output_9_1.png)
     
 
 
 
     
-![png](images/images/output_9_2.png)
+![png](images/output_9_2.png)
     
 
 
 
     
-![png](images/images/output_9_3.png)
+![png](images/output_9_3.png)
     
 
 
@@ -149,19 +149,19 @@ plt.show()
 
 
     
-![png](images/images/output_10_1.png)
+![png](images/output_10_1.png)
     
 
 
 
     
-![png](images/images/output_10_2.png)
+![png](images/output_10_2.png)
     
 
 
 
     
-![png](images/images/output_10_3.png)
+![png](images/output_10_3.png)
     
 
 
@@ -264,7 +264,7 @@ print(modelo.feature_importances_)
 
 
     
-![png](images/images/output_21_0.png)
+![png](images/output_21_0.png)
     
 
 
@@ -413,7 +413,7 @@ plt.show()
 
 
     
-![png](images/images/output_29_1.png)
+![png](images/output_29_1.png)
     
 
 
