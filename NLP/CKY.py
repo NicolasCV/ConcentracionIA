@@ -1,3 +1,4 @@
+from TreePrint import *
 
 s = "time flies like an arrow"
 words = s.split(" ")
@@ -29,12 +30,31 @@ Rtypes = {
   "Preposition NP":('PP',0.1),
 }
 
+class Node:
+  def __init__(self, val, left = None ,right = None):
+    self.val = val
+    self.left = left
+    self.right = right
+
+  def __str__(self, level=0):
+    ret = "\t"*level+repr(self.val)+"\n"
+
+    #Si estamos en la ultima, ya no son pointers si no texto
+    if self.left:
+      ret += self.left.__str__(level+1)
+    if self.right:
+      ret += self.right.__str__(level+1)
+    return ret
+
+  def __repr__(self):
+      return '<TNode>'
+
 Rwords= {
-  'time': [('NP',0.002),('Nominal',0.002),('VP',0.004),('Verb',0.01),('Noun',0.01)],
-  'flies': [('NP',0.002),('Nominal',0.002),('VP',0.008),('Verb',0.02),('Noun',0.01)],
-  'arrow': [('NP',0.002),('Nominal',0.002),('Noun',0.01)],
-  'like': [('VP',0.008),('Verb',0.02),('Preposition',0.05)],
-  'an': [('Det',0.05)],
+  'time': [('NP',0.002,Node('time(NP)')),('Nominal',0.002,Node('time(Nominal)')),('VP',0.004,Node('time(VP)')),('Verb',0.01,Node('time(Verb)')),('Noun',0.01,Node('time(Noun)'))],
+  'flies': [('NP',0.002,Node('flies(NP)')),('Nominal',0.002,Node('flies(Nominal)')),('VP',0.008,Node('flies(VP)')),('Verb',0.02,Node('flies(Verb)')),('Noun',0.01,Node('flies(Noun)'))],
+  'arrow': [('NP',0.002,Node('arrow(NP)')),('Nominal',0.002,Node('arrow(Nominal)')),('Noun',0.01,Node('arrow(Noun)'))],
+  'like': [('VP',0.008,Node('like(VP)')),('Verb',0.02,Node('like(Verb)')),('Preposition',0.05,Node('like(Preposition)'))],
+  'an': [('Det',0.05,Node('an(Det)'))],
 }
 
 #Llenamos la diagonal
@@ -47,6 +67,7 @@ j = len(words) - 2
 prevj = j
 maxI = len(words) - 2
 
+
 def calcProb(e1,e2):
   global Rtypes,Rwords
   res = []
@@ -56,7 +77,8 @@ def calcProb(e1,e2):
 
       if key in Rtypes:
         prob = elementLeft[1] * elementDown[1] * Rtypes[key][1]
-        res.append((Rtypes[key][0],prob))
+        trail = Node(key, elementLeft[2],elementDown[2])
+        res.append((Rtypes[key][0],prob,trail))
 
   return res
 
@@ -86,7 +108,10 @@ while (i >= 0 and j >= 0):
     prevj = j
     row += 1
 
+yeah = (matrix[0][0][0][2])
 
-print()
-print()
-printMatrix()
+for final in matrix[0][0]:
+  print(final[0] + ': ')
+  print_tree(final[2])
+  print('\n\n\n')
+
