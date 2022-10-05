@@ -108,10 +108,10 @@ while (i >= 0 and j >= 0):
     prevj = j
     row += 1
 
-yeah = (matrix[0][0][0][2])
+sortedByProbability = sorted(matrix[0][0], key=lambda x: x[1])
 
-for final in matrix[0][0]:
-  print(final[0] + ': ')
+for final in sortedByProbability:
+  print(final[0] + ' %' +str(final[1]*100) + ': ')
   print_tree(final[2])
   print('\n\n\n')
 
