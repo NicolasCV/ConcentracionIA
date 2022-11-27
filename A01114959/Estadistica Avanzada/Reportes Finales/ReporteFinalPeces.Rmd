@@ -1,0 +1,183 @@
+---
+title: "Reporte - Los Peces y el Mercurio"
+author: "Nicolas Cardenas A01114959"
+date: "2022-10-19"
+output: pdf_document
+---
+
+Módulo 5: Estadística Avanzada para ciencia de datos y nombre de la concentración
+
+Grupo 502
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## EL PROBLEMA
+
+La contaminación por mercurio de peces en el agua dulce comestibles es una amenaza directa contra nuestra salud. Se llevó a cabo un estudio reciente en 53 lagos de Florida con el fin de examinar los factores que influían en el nivel de contaminación por mercurio. Las variables que se midieron se encuentran en mercurio.csv su descripción es la siguiente: 
+
+X1 = número de indentificación
+X2 = nombre del lago
+X3 = alcalinidad (mg/l de carbonato de calcio)
+X4 = PH
+X5 = calcio (mg/l)
+X6 = clorofila (mg/l)
+X7 = concentración media de mercurio (parte por millón) en el tejido muscualar del grupo de peces estudiados en cada lago
+X8 = número de peces estudiados en el lago
+X9 = mínimo de la concentración de mercurio en cada grupo de peces
+X10 = máximo de la concentración de mercurio en cada grupo de peces
+X11 = estimación (mediante regresión) de la concentración de mercurio en el pez de 3 años (o promedio de mercurio cuando la edad no está disponible)
+X12 = indicador de la edad de los peces (0: jóvenes; 1: maduros)
+
+```{r}
+M = read.csv("mercurio.csv")
+
+colnames(M) <- c("id", "nombre", "alcalinidad", "ph","calcio","clorofila","mediaMercurio","numPeces","minMercurio","maxMercurio","estimacion","madurez")
+
+id = M$id 
+nombre = M$nombre #CATEGORICA NOMINAL
+alcalinidad = M$alcalinidad #NUMERICA CONTINUA
+ph = M$ph #NUMERICA CONTINUA
+calcio = M$calcio #NUMERICA CONTINUA
+clorofila = M$clorofila #NUMERICA CONTINUA
+mediaMercurio = M$mediaMercurio #NUMERICA CONTINUA
+numPeces = M$numPeces #NUMERICA DISCRETA
+minMercurio = M$minMercurio #NUMERICA CONTINUA
+maxMercurio = M$maxMercurio #NUMERICA CONTINUA
+estimacion = M$estimacion #NUMERICA CONTINUA
+madurez = M$madurez #CATEGORICA ORDINAL
+
+#Sin ID y si Nombre
+M <- M[,c(-1,-2,-12)]
+
+print("Informacion General de los datos")
+summary(M)
+print("Desviacion Estandar")
+apply(M,2,sd)
+```
+## Resumen 
+
+Se retomaron los diferentes temas vistos en clase para el analisis de los datos. Se realizo primeramente un analisis de normalidad de las variables (para determinar las significantes), asi como un analisis de componentes principales (con el objetivo de reducir dimensionalidad y encontrar variables relacionadas). Todo esto con el mismo objetivo que nuestro reporte pasado: determinar los factores principales de los niveles de mercurio en el agua.
+
+## Introducción
+Tras haber hecho un reporte analisando las diferentes variables a detalle, vamos a omitirlo para este reporte. Este reporte busca ser una extension de nuestro reporte pasado pero con el mismo objetivo, responder las pregunta: ¿Cuáles son los principales factores que influyen en el nivel de contaminación por mercurio en los peces de los lagos de Florida?
+
+## Análisis de los resultados 
+
+# TEST MULTIVARIADO
+
+Primero que nada, realizamos la prueba de Mardia y Anderson Darling para identificar las variables que son normales y detectar posible normalidad multivariada de grupos de variables.
+```{r}
+S = cov(M)
+R = cor(M)
+
+#Medias
+X = colMeans(M)
+```
+
+Primero checamos la Distancia de Mahalanobis y Multinormalidad Test gráfico Q-Q Plot para observar datos atipicos:
+```{r}
+p = length(M)
+
+#Distancia de Mahalanobis
+d2M =  mahalanobis(M,X,S)
+d2M
+
+#Multinormalidad Test gráfico Q-Q Plot
+plot(qchisq(((1:nrow(M)) - 1/2)/nrow(M),df=p),sort( d2M ) )
+abline(a=0, b=1,col="red")
+```
+Utilizando el QQplot multivariado y la distancia de Mahalanobis podemos detectar que hay varios datos atipicos.
+
+Seguiremos con un MVN test:
+
+Prendemos showOutliers porque queremos los datos sin datos atipicos
+
+Apagamos tambien covariance porque no queremos los datos estandarizados ya que nos importan las relaciones naturales de los factores.
+
+```{r}
+library(MVN)
+mvn(M,mvn = "mardia", covariance = FALSE,showOutliers = TRUE)
+```
+Lo que podemos observar el la curtosis es que tenemos buena curtosis, no es 3 pero es suficientemente cerca para lo que buscamos, va a ser leptocurtica, es decir un poco mas "flaca". El cesgo es pesimo y es positivo lo cual indica que la moda es mas pequena que la mediana y la mediana es menor que el promedio. No nos indica normalidad.
+
+Utilizaremos las variables que resultaron normales y volveremos a realiar el test.
+
+# Variables Normales
+
+```{r}
+normales = M[c("ph","maxMercurio")]
+mvn(normales,mvn = "mardia", covariance = FALSE,showOutliers = TRUE)
+```
+Nos da muchos mejores resultado, esto nos indica que ph y el max de mercurio cuentan con una dsitribucion normal multivariada.
+
+
+## COMPONENTES PRINCIPALES
+
+Realizaremos un análisis de componentes principales con la base de datos completa para identificar los factores principales que intervienen en el problema de la contaminación por mercurio de los peces en agua dulce. 
+
+# CORRELACION
+Para empezar a justificar el uso de componentes principales para este analisis, primero debemos observar la matriz de correlaciones.
+```{r}
+library(corrplot)
+corrplot(cor(M), type = 'upper')
+```
+Como podemos observar, todas las medidas de mercurio (min, max, media, estimacion) son grandemente relacionadas). Esto nos abre la puerta a realizar una buena reduccion de dimensiones y podemos "singularizar" nuestra variable objetivo (niveles de mercurio).
+
+# COMPONENTES
+
+A continuacion sacaremos los componentes principales:
+```{r}
+PS = eigen(S)
+PR = eigen(R)
+
+lambdasS = PS$values
+varTotalS = sum(diag(S))
+proporcionesS = lambdasS/varTotalS
+
+lambdasR = PR$values
+varTotalR = sum(diag(R))
+proporcionesR = lambdasR/varTotalR
+
+cat("C.P. Covarianza: ",cumsum(proporcionesS),"\n\n")
+cat("C.P. Correlacion (Estandarizados): ",cumsum(proporcionesR),"\n\n")
+```
+
+Podemos ver que con cuatro componentes tenemos mas de 99% de la varianza explicada, y cuando esta estandarizado, necesitamos 7 para explicar mas del 99%
+
+Podriamos conformarnos con menos varianza explicada pero por la naturaleza del problema y para no perder informacion, dejaremos nuestro estandar a arriba de 99%
+
+Ahora veremos los pesos para cada uno de los componentes para ver cuales estan relacionados:
+```{r}
+library(stats)
+library(factoextra)
+library(ggplot2)
+
+cpS=princomp(M,cor=FALSE)
+cpaS=as.matrix(M)%*%cpS$loadings
+cpS$loadings
+```
+
+Observemoslo graficamente:
+```{r}
+library(FactoMineR)
+library(factoextra)
+library(ggplot2) 
+cp3 = PCA(M)
+fviz_pca_ind(cp3, col.ind = "blue", addEllipses = TRUE, repel = TRUE)
+fviz_screeplot(cp3)
+fviz_contrib(cp3, choice = c("var"))
+```
+Esta prueba nos sirvio para ver las relaciones entre variables. Hay que tomar en consideracion que esto es para el primer y segundo componente solamente (los que mas contribuyen). En cuanto a variabilidad explicada vemos que el primero es el que mas nos da por una buena cantidad y sus pesos son mayormente alcalinidad, ph, calcio y clorofila. Esto cuadra con nuestro reporte anterior en el cual concluimos que alcalinidad y clorofila eran los mas relacionados al nivel de mercurio.
+
+## Conclusión
+Utilizando las herramientas que aprendimos, pudimos extender nuestro reporte pasado a uno mucho mas extenso, utilizando los analisis de normalidad y componentes principales. Este analisis en conjunto con los otros nos ayudaron a determinar que factores realmente afectan el nivel del mercurio en el agua de los lagos de Florida. Al igual que nuestro reporte pasado, pudimos observer que la alcalinidad y la clorofila son grandes factores, tambien contribuimos en este reporte que el ph y el calcio son factores. Sin embargo, en ambos reportes observamos que la alcalinidad es el factor #1 en el nivel de mercurio, por lo tanto, si se tuviera que tomar accion justo ahora seria atacar primeramente los niveles de alcalinidad. En el reporte pasado tocamos varios metodos para tratar justo esto en el agua. 
+
+## Bibliografía
+
+Alcalinidad - Productos y descripción general de los parámetros de calidad del agua | Hach. (2022). Retrieved 27 November 2022, from https://es.hach.com/parameters/alkalinity#:~:text=La%20alcalinidad%20es%20una%20medida,pH%20cuando%20se%20a%C3%B1ade%20%C3%A1cido.
+
+## Anexos
+
+Drive: https://drive.google.com/drive/folders/16Y6_cbbXaWo_AuxQGE0QRvrL4VdnlmkS?usp=share_link

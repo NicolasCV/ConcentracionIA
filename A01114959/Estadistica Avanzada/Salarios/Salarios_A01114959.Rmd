@@ -1,0 +1,519 @@
+---
+title: "Salarios"
+author: "Nicolas Cardenas Valdez A01114959"
+output: 
+    pdf_document :
+      latex_engine : xelatex
+date: "2022-08-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+## EL PROBLEMA
+
+Identifica las condiciones que hacen que una persona especialista en analizar datos tenga un mejor sueldo de acuerdo con la base de datos que proporciona Kaggle en una muestra de personas que se dedican al analisis de datos en diferentes partes del mundo. La informacion es muy variada con muchos datos atipicos por lo tanto la parte principal va a ser limpiar los datos y tratar de observar tendencias.
+
+# Resumen
+
+Para este analisis buscamos analizar tendencias, tratar de agrupar datos, entre otras cosas. Nos basaremos principalmente en pruebas de ANOVA para encontrar las variables que mas tienen efecto sobre el salario. No necesariamente buscamos predecir el salario si no darnos una mejor idea. Como contamos con muchas variables categoricas ANOVA es nuestra mejor solucion para empezar a modelarlo.
+
+```{r}
+M=read.csv("ds_salaries.csv")
+```
+
+## DESCRIPCION DE LOS DATOS
+| **Columna**              | **Descripción**                                                                                                                                                                                    |
+|--------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| trabajo_año              | El año en que se pagó el salario.                                                                                                                                                                  |
+| nivel de experiencia     | El nivel de experiencia en el puesto durante el año con los siguientes valores posibles: EN Entry-level/Junior MI Mid-level/Intermediate SE Senior-level/Experto EX Executive-level/Director       |
+| Tipo de empleo           | El tipo de empleo para el puesto: PT Tiempo parcial FT Tiempo completo CT Contrato FL Freelance                                                                                                    |
+| título profesional       | Rol trabajado durante el año.                                                                                                                                                                      |
+| salario                  | El monto total del salario bruto pagado.                                                                                                                                                           |
+| salario_moneda           | La moneda del salario pagado como un código de moneda ISO 4217.                                                                                                                                    |
+| salario en usd           | El salario en USD (tasa de cambio dividida por la tasa promedio de USD para el año respectivo a través de fxdata.foorilla.com).                                                                    |
+| residencia_empleado      | El país de residencia principal del empleado durante el año laboral como código de país ISO 3166.                                                                                                  |
+| relación_remota          | La cantidad total de trabajo realizado de forma remota, los valores posibles son los siguientes: 0 Sin trabajo remoto (menos del 20 %) 50 Parcialmente remoto 100 Totalmente remoto (más del 80 %) |
+| Ubicación de la compañía | El país de la oficina principal del empleador o sucursal contratante como un código de país ISO 3166.                                                                                              |
+| tamaño de la empresa     | Número promedio de personas que trabajaron para la empresa durante el año: S menos de 50 empleados (pequeño) M 50 a 250 empleados (mediano) L más de 250 empleados (grande)                        |
+
+
+## EXPLORACION VARIABLES
+
+Primero que nada determinaremos los datos que no son relevantes al analisis que queremos usar. 
+
+El primero que utilizaremos es WORK_YEAR, este es muy relevante ya que podemos ver que tanto han incrementado o declinado los salarios durante el tiempo. 
+```{r}
+work_year = M$work_year 
+table(work_year) #NUMERICA DISCRETA
+```
+
+Otro que es altamente relevante es el titulo o puesto.
+```{r}
+job_title = M$job_title
+table(job_title) #CUALITATIVA NOMINAL
+```
+Como podemos observar, hay muchos tipos de puestos, muchos en los cuales solo tenemos un solo dato, en el futuro buscaremos tratar de agrupar los puestos para tener una mejor idea por sector de la industria.
+
+Tambien el nivel de que tan remoto es en conjunto con el tipo de empleo que es (FULL TIME, PART TIME, ETC.) Esto nos habla un poco mas sobre el trabajo ademas de solamente el puesto que tienen.
+
+```{r}
+employment_type = M$employment_type
+table(employment_type) #CUALITATIVA NOMINAL
+```
+```{r}
+remote_ratio = M$remote_ratio
+table(remote_ratio) #CUALITATIVA NOMINAL
+```
+
+El mas evidente son las columnas de SALARIO + DIVISA, para esta informacion usaremos SALARY_IN_USD ya que nos brindara una unidad estandarizada entre todos los salarios. Si utilizaramos los de SALARIO + DIVISA tendriamos unidades en diferentes DIVISAS lo cual no seria bueno para nuestro analisis. Nos trae un estandar para el salario.
+
+```{r}
+#EN VEZ DE UTILIZAR ESTO
+#salary = M$salary
+#salary_currency = M$salary_currency
+
+#UTILIZAREMOS SOLO ESTE
+salary_in_usd = M$salary_in_usd #CUANTITATIVA DISCRETA
+
+print(paste('Range ',max(salary_in_usd)-min(salary_in_usd),' / ', 'Variance ',var(salary_in_usd),' / ', 'STD ',sd(salary_in_usd)))
+summary(salary_in_usd)
+
+```
+
+
+La ubicacion de la empresa tambien puede ser relevante, no la descartaremos, sin embargo, no nos enforcaremos en esto porque para la mayoria de los paises solo contamos con uno o dos datos. Lo mismo va para employee 
+
+```{r}
+company_location = M$company_location
+table(company_location) #CUALITATIVA NOMINAL
+```
+
+
+```{r}
+employee_residence = M$employee_residence
+table(employee_residence) #CUALITATIVA NOMINAL
+```
+
+
+El tamano de la empresa tambien nos habla bien del salario. Esta tambien la tendremos que convertir a variable dummy.
+
+```{r}
+company_size = M$company_size
+table(company_size) #CUALITATIVA ORDINAL
+```
+
+Problemas de datos:
+Primero checamos los NA en cada columna
+
+```{r}
+colSums(is.na(M))
+```
+
+Vemos que no tenemos NAs y ya viendo las frecuencias de todos los valores en las columnas, vemos que no hay indiscripencias en lo datos y podemos proceder.
+
+# EXPLORACION
+
+Primero que nada, buscaremos encontrar algunos datos generales sobre nuestra base de datos.
+
+Haremos algunas pruebas de normalidad para los salarios (en USD), esto es solo con las datos que tenemos sin limpiar o filtrar por alguna categoria.
+
+Histograma
+```{r}
+hist(salary_in_usd, col='steelblue', main='Histograma Salarios',breaks=70)
+```
+
+El histograma (incluso si quitaramos los datos atipicos) muestra un sesgo hacia la derecha, lo cual no nos indica una distribucion normal
+
+
+# QQ Plot Salarios
+```{r}
+qqnorm(salary_in_usd, main='QQ Plot Salarios')
+qqline(salary_in_usd)
+```
+Esto nos muestra la misma informacion que el histograma, que tiene un sesgo hacia la derecha y que no es una distribucion normal
+
+# SESGO
+
+Ya que estamos hablando del sesgo, usaremos una libreria para encontrar el valor exacto.
+
+```{r}
+library(e1071)
+skewness(salary_in_usd)
+```
+
+El sesgo es muy grande positivo, lo cual indica que se inclina a la derecha, que es lo que se muestra igualmente en nuestro QQplot e Histograma.
+
+En conclusion todas nuestras pruebas indican que no es una distribucion normal. Sin embargo, debido a la cantidad de datos esto no es relevante. Lo mencionaremos a detalle en proximas secciones.
+
+## PREPARACION DE LOS DATOS
+
+Prepararemos los datos alrededor de nuestra variable objetivo: los salarios (especificamente los salarios en usd, debido a lo que explicamos anteriormente). Ya que la mayoria de lo que nos interesa saber es como/donde provienen los salarios mas altos.
+
+Como pudimos ver en el histograma, hay muchos datos atipicos. Para nuestro analisis, tenemos que determinar primero si queremos quitar los atipicos + extremos o solo los extremos, para esto hay que realizar un boxplot de los salarios y analizarlo
+
+```{r}
+boxplot(salary_in_usd, horizontal = TRUE)
+```
+
+Viendo el boxplot vemos que seria buena idea quitar lo atipicos y extremos. Tiene mas sentido para tener un analisis propio que nos de una idea en lo mas comun. Hay muchos casos especiales donde hay salarios extremadamente inflados y los queremos sacar de nuestro analisis. 
+
+Primero determinaremos los rangos intercuartiles
+
+```{r}
+Q <- quantile(salary_in_usd, probs=c(.25, .75), na.rm = FALSE)
+iqr <- IQR(salary_in_usd)
+
+#Utilizamos 1.5 para datos atipicos + extremos, se utiliza 3 para solo quitar los datos extremos, 
+up <-  Q[2]+1.5*iqr # Upper Range  
+low <- Q[1]-1.5*iqr # Lower Range
+```
+
+Ya con los limites que tenemos, actualizaremos la matriz con la nueva informacion
+
+```{r}
+#Respaldamos una matriz con outliers
+matrixConOutliers <- M
+M<- subset(M, (M$salary_in_usd > low) & (M$salary_in_usd < up))
+salary_in_usd <- M$salary_in_usd
+```
+
+# VOLVER A CHECAR DISTRIBUCION DE X
+```{r}
+hist(salary_in_usd, col='steelblue', main='Histograma Salarios',breaks=70)
+```
+
+El histograma nos muestra que sigue sin ser una distribucion normal pero como tenemos muchos datos no nos importa la distribucion de x ya que $\bar{x}$ sera distribuida normalmente
+
+Asi quedo mucho mejor, nos da un mejor "scope" en nuestra informacion. Los datos atipicos nomas alterarian nuestro analisis.
+
+
+# DUMMY VARIABLES
+Ya con nuestros datos atipicos limpios, debemos cambiar las columnas restantes a dummy variables. Con R este es un proceso sencillo. Para las dummys en realidad necesitamos n-1 columnas pero para hacerlo mas facil de leer y entender usaremos diferentes columnas para cada dato.
+
+```{r}
+M$contract <- ifelse(M$employment_type == 'CT', 1, 0)
+M$freelance <- ifelse(M$employment_type == 'FL', 1, 0)
+M$fullTime <- ifelse(M$employment_type == 'FT', 1, 0)
+M$partTime <- ifelse(M$employment_type == 'PT', 1, 0)
+
+M$entry <- ifelse(M$experience_level == 'EN', 1, 0)
+M$midlevel <- ifelse(M$experience_level == 'MI', 1, 0)
+M$senior <- ifelse(M$experience_level == 'SE', 1, 0)
+M$executive <- ifelse(M$experience_level == 'EX', 1, 0)
+
+M$fullRemote <- ifelse(M$remote_ratio == 100, 1, 0)
+M$partialRemote <- ifelse(M$remote_ratio == 50, 1, 0)
+M$noRemote <- ifelse(M$remote_ratio == 0, 1, 0)
+
+M$largeCompany <- ifelse(M$company_size == 'L', 1, 0)
+M$mediumCompany <- ifelse(M$company_size == 'M', 1, 0)
+M$smallCompany <- ifelse(M$company_size == 'S', 1, 0)
+```
+
+Para nuestra finalidad, como nuestra variable objetivo es el salario, podemos agrupar por estas variables sin tener que hacer las dummies, sin embargo, si en un futuro deseamos hacer algun tipo de modelo de regresion lineal o algo parecido, seran necesitadas las dummy variables.
+
+
+# INTERVALOS DE CONFIANZA
+
+A continuacion haremos algunas funciones para calcular los intervalos de confianza de acuerdo a nuestra funcion
+
+```{r}
+getError <- function(X, alfa) {
+  n = length(X)
+  media = mean(X) #Igual podriamos utilizar una media hipotesis como miu, en este caso usaremos la misma que la muestra
+  sigma = sd(X)
+  
+  ErrorEst = sigma/sqrt(n)
+  E = abs(qnorm(alfa/2))*ErrorEst
+  return(E)
+}
+  
+printLimits <- function(X, alfa) {
+  E <- getError(X, alfa)
+  media <- mean(X)
+    
+  lowerLimit =  media- E
+  upperLimit = media + E
+  
+  print(paste("Intervalo de ", floor((1-alfa)*100),"% de confianza:"))
+  print(paste("Lower Limit: ", floor(lowerLimit)))
+  print(paste("Average: ", floor(media)))
+  print(paste("Upper Limit: ", floor(upperLimit)))
+  return(c(lowerLimit,media,upperLimit))
+}
+```
+
+
+```{r}
+library("RColorBrewer")
+plotInt <- function(maxIntervals, main_, labels_, xmin, xmax) {
+  plot(0, ylim=c(0,maxIntervals+1), xlim=c(xmin-100,xmax+100),yaxt="n", ylab="", main=main_)
+  axis(2, at=c(1:maxIntervals), labels=labels_)
+}
+addInt <- function(info, n_) {
+  #Para insertar los intervalos [Ai,Bi], con Ai y Bi son los límites inferior y superior del intervalo i respectivamente:
+  arrows(info[1], n_, info[3], n_, angle=90, code=3, length = 0.1, lwd = 2, col=brewer.pal(n = 10, name = "Spectral")[n_])
+  #Para dibujar la media dentro del  intervalo (insertar un punto), donde mi es la media del intervalo i:
+  points(info[2], n_, pch=19, cex=1.1, col=brewer.pal(n = 10, name = "Spectral")[n_])
+}
+```
+
+Primero con nuestros salarios sin categorizar y un alpha de 0.01 (99% de confianza) que es la que estaremos utilizando para todos nuestros calculos. Estamos usando un nivel de confianza mas alto que el normal (95%) ya que este es
+
+```{r}
+res <- printLimits(salary_in_usd, 0.01)
+plotInt(1, "CI for Salaries, 99% confidence" ,c("Salarios en USD"), min(res),max(res))
+addInt(res, 1)
+```
+
+ es un buen "fit" ya que podemos estar 99% seguros que la media de la poblacion esta entre  y  lo cual es un rango muy pequeno.
+
+# ANALISIS DE DATOS
+
+Buscaremos tener un vistazo a los salarios de acuerdo con diferentes variables categoricas.
+
+Para esto crearemos una funcion que nos de las estadisticas a partir de un subset de los datos:
+
+```{r}
+getStats <- function(subset, title) {
+  print(paste(title,':'))
+  print(paste('N datos: ',length(subset),' / ','Range ',max(currYearSalary)-min(subset),' / ', 'Variance ',var(subset),' / ', 'STD ',sd(subset)))
+  print(summary(subset))
+  writeLines("\n")
+  printLimits(subset, 0.01)
+  writeLines("\n\n")
+}
+```
+
+
+# SUMMARY DE SALARIO POR ANIO
+Encontraremos la media y la desviacion estandar por ano para los salarios
+
+```{r}
+X<-split(M, M$work_year)
+years = names(X)
+
+plotInt(length(years), "CI for Salaries by Year, 99% confidence" ,c(years), min(salary_in_usd),max(salary_in_usd))
+counter <- 1
+for (year in years){
+  currYear<-X[[year]]
+  currYearSalary = currYear$salary_in_usd
+  getStats(currYearSalary,paste('Year ',year))
+  
+  res <- printLimits(currYearSalary, 0.01)
+  addInt(res, counter)
+  counter <- counter + 1
+}
+```
+
+Lo que podemos ver a partir de esta informacion es que el salario ha incrementaddo durante los anios. Entre 2020 y 2021 es casi cierto que no incrementaron pero de 2021 a 2022 es donde estamos 99% seguros que si incremento. La desvicacion estandar sigue siendo aproximadamente lo mismo. La cantidad de datos es la misma con todos los anios entonces nos indica que tenemos aproximadamente el mismo nivel de precision en nuestros datos. Esto nos muestra que la demanada para analistas de datos esta subiendo, este incremento no solo es igual a la inflacion si no mas incluso durante en periodos de pandemia lo cual es una buena indicacion. 
+
+# ANOVA ANIO
+```{r}
+boxplot(M$salary_in_usd~M$work_year)
+```
+
+```{r}
+years <- sapply(M$work_year, as.character)
+A<-aov(M$salary_in_usd~years)
+summary(A)
+```
+
+Esto nos indica que si efectivamente si existe efecto para esta variable 
+
+```{r}
+I = TukeyHSD(A)
+plot(I)
+```
+Esto nos indica que el efecto entre 2020 y 2021 es igual pero entre 2022 es diferente a estas. Mostrando que incremento, al igual a nuestro otro analisis
+
+
+
+# SALARIO POR TAMANO DE LA EMPRESA
+Creo que un analisis interesante podria ser el salario a partir del tamano de la empresa.
+
+Hacemos lo mismo, pero ahora con respecto al tamano de la empresa
+
+```{r}
+X<-split(M, M$company_size)
+sizes = names(X)
+
+plotInt(length(sizes), "CI for Salaries by Company Size, 99% confidence" ,c(sizes), min(salary_in_usd),max(salary_in_usd))
+counter <- 1
+
+for (size in sizes){
+  currSize<-X[[size]]
+  currSizeSalary = currSize$salary_in_usd
+  getStats(currSizeSalary,paste('Size ',size))
+  
+  res <- printLimits(currSizeSalary, 0.01)
+  addInt(res, counter)
+  counter <- counter + 1
+}
+```
+Como podemos observar, la media por tamano de empresa resulta ser interesante ya que la mediana fue la que resulto en lo mas alto (con la media de la muestra). Sin embargo podemos estar muy seguros que la media de la poblacion en cuanto a tamano de la empresa es la misma para empresas grandes y empresas medianas. Lo que podemos tener asegurados es que ambas de estas tienen media mas grande que la pequena. Creo que esto se puede deber a que en empresas grandes necesitan a muchas personas para poder funcionar correctamente lo cual puede disminuir el salario promedio, sin embargo, tambien hay muchas posiciones ejecutivas que pueden aumentar el salario. Para esto analizaremos el promedio de salarios en empresas grandes por nivel de experiencia para tener una mejor idea. 
+
+Primero que nada para ajustar con estos ejecutivos, hay que utilizar nuestro "dataset" con todos los datos (incluyendo atipicos)
+
+```{r}
+dividedBySize<-split(matrixConOutliers, matrixConOutliers$company_size)
+summary(dividedBySize$`L`$salary_in_usd)
+```
+
+Como podemos ver ya con los datos atipicos incluidos, el promedio es mucho mas alto que las empresas medianas y pequenas lo cual indica que mueve mucho la media incluir todos estos puestos ejecutivos. Ahora analizaremos esta misma informacion (company_size = L) pero divido por nivel de experiencia.
+
+```{r}
+X<-split(dividedBySize$`L`, dividedBySize$`L`$experience_level)
+niveles = names(X)
+
+plotInt(length(niveles), "CI for Salaries Large Company, by XP Level, 99% confidence" ,c(niveles), min(dividedBySize$`L`$salary_in_usd),max(dividedBySize$`L`$salary_in_usd))
+counter <- 1
+
+for (nivelExperiencia in niveles){
+  currExperiencia<-X[[nivelExperiencia]]
+  currXPSalary = currExperiencia$salary_in_usd
+  getStats(currXPSalary,paste('Nivel de Experiencia en Empresa Grande: ',nivelExperiencia))
+  
+  res <- printLimits(currXPSalary, 0.01)
+  addInt(res, counter)
+  counter <- counter + 1
+}
+
+
+```
+
+Como podemos ver nuestra hipotesis es correcta, el salario de los ejecutivos esta incluso fuera de nuestra muestra, la mayoria son datos atipicos que no se mostrarian con nuestra limpieza de datos. Por lo que podemos ver aqui es que EN y MI son igual, pero Ejecutivo y Senior no solo son mas altos si no que mucho mas altos. Y observamos mucha variacion en cuanto al intervalo de ejecutivo. Tambien podemos deducir que la unica razon por la que las empresas grandes tienen el promedio mas grande debido a la posicion de los ejecutivos y seniors. Y solo para tener la idea completa, tambien analizaremos mas a profundidad por nivel de experiencia en empresas medianas
+
+```{r}
+X<-split(dividedBySize$`M`, dividedBySize$`M`$experience_level)
+niveles = names(X)
+
+#Usaremos los mismos xlims que en la empresa grande para observar la diferencia
+plotInt(length(niveles), "CI for Salaries Medium Company, by XP Level, 99% confidence" ,c(niveles), min(dividedBySize$`L`$salary_in_usd),max(dividedBySize$`L`$salary_in_usd))
+counter <- 1
+
+for (nivelExperiencia in niveles){
+  currExperiencia<-X[[nivelExperiencia]]
+  currXPSalary = currExperiencia$salary_in_usd
+  getStats(currXPSalary,paste('Nivel de Experiencia en Empresa Grande: ',nivelExperiencia))
+  
+  res <- printLimits(currXPSalary, 0.01)
+  addInt(res, counter)
+  counter <- counter + 1
+}
+
+```
+
+Al observar estos ultimos datos nos damos cuenta que la media de cada nivel de puesto en una empresa mediana es por el nivel de experiencia, excepto a nivel senior/ejectivo que es donde son iguales. Tambien observamos una variacion mas pequena que las empresas 
+
+# ANOVA TAMANO EMPRESA
+```{r}
+boxplot(M$salary_in_usd~M$company_size)
+```
+```{r}
+A<-aov(M$salary_in_usd~M$company_size)
+summary(A)
+```
+Esto nos indica que si efectivamente si existe efecto para esta variable 
+
+```{r}
+I = TukeyHSD(A)
+plot(I)
+```
+Esto nos indica que la diferencia entre el efecto pequena y (mediana y grande) es la misma y que el efecto de mediana y grande es igual.
+
+# SALARIO POR PAIS
+
+Ahora analizaremos los salarios en termino de pais, pero como hay muchos paises con pocos datos, utilizaremos un filtro para solo mostrar los paises
+```{r}
+X<-split(M, M$company_location)
+
+#Check all which have more than 30 data points
+minDatos = 30
+paises = names(X)
+paisesFiltrados <- vector()
+
+#Filtramos los paises
+for (pais in paises){
+  currPais<-X[[pais]]
+  currPSalary = currPais$salary_in_usd
+  if (length(currPSalary) >= minDatos) {
+    paisesFiltrados <- c(paisesFiltrados, pais)
+  }
+}
+
+plotInt(length(paisesFiltrados), "CI for Salaries by Country, 99% confidence" ,c(paisesFiltrados), min(M$salary_in_usd),max(M$salary_in_usd))
+counter <- 1
+
+for (paisFiltrado in paisesFiltrados){
+  currPais<-X[[paisFiltrado]]
+  currPSalary = currPais$salary_in_usd
+
+  getStats(currPSalary,paste('Pais ',pais))
+  
+  res <- printLimits(currPSalary, 0.01)
+  addInt(res, counter)
+  counter <- counter + 1
+  
+}
+```
+Como podemos ver hay muy pocos datos en la mayoria de los paises, y nos quedaron solo unos pocos pero estos dan buena indicacion de cual de estos paises es mejor para trabajar, la opcion mas clara es Estados Unidos ya que todo el intervalo esta arriba de los demas. CA y GB estan muy cercanos y podemos decir que son similares. Pudieramos tomar paises que tengan menos de 30 datos pero tendriamos que checar la distribucion y encontrar el modelo, lo que realizamos pero no queda en el "scope" de este analisis. (La distribucion es BETA).
+
+No se hare ANOVA para los paises ya que es muy pequena la muestra y no queremos analizar todos los paises porque eso no seria efectivo.
+
+# SALARIO POR MODALIDAD
+Por ultimo, a mi en lo personal me interesa como cambian los salarios dependiendo de que tan remoto es. Ahora con lo de la pandemia y hacia donde se esta moviendo el mundo (trabajos cada vez mas tecnologicos), se estan abriendo muchos trabajos remotos, por lo cual me interesaria saber si hay diferencia y que tanta, asi que haremos el mismo analisis pero para el tipo de modalidad.
+
+```{r}
+X<-split(M, M$remote_ratio)
+typesOfRemote = names(X)
+
+plotInt(length(typesOfRemote), "CI for Salaries by Remote %, 99% confidence" ,c(typesOfRemote), min(salary_in_usd),max(salary_in_usd))
+counter <- 1
+for (typeOfRemote in typesOfRemote){
+  currRemote<-X[[typeOfRemote]]
+  currRemoteSalary = currRemote$salary_in_usd
+
+  print(paste("% Remoto ",typeOfRemote,": "))
+  print(table(currRemote$experience_level))
+  
+  res <- printLimits(currRemoteSalary, 0.01)
+  addInt(res, counter)
+  counter <- counter + 1
+}
+```
+Esta grafica creo que es la mas interesante de todas ya que podemos ver que la diferencia entre trabajos hibridos (50%) remoto, y los (100%) remotas es no solo grande pero tambien definitivamente (99% de confianza) mas alta si trabajas de manera completamente remota. Sin embargo, hay que considerar que no tenemos los datos atipicos, los cuales nos subirian la media de los que debido a que muchos de estos trabajos de ejecutivos sorprendentemente son remotos actualmente. Como podemos ver en la tabla de frecuencias el salario creo que no se debe al trabajo remoto si no mas a la posicion. Porque podemos ver que los puestos con mas experiencia actualmente son completamente remotos. Lo que si podemos confirmar es que los que son completamente presenciales ganan mas que los hibridos y igual a los remotos. Lo cual nos indica que definitivamente hibrido es el peor modelo, pero debido a la distribucion de puestos dentro de cada modalidad.
+
+# ANOVA MODALIDAD
+```{r}
+boxplot(M$salary_in_usd~M$remote_ratio)
+```
+
+```{r}
+rratios <- sapply(M$remote_ratio,as.character)
+A<-aov(M$salary_in_usd~ rratios)
+summary(A)
+```
+
+Esto nos indica que si efectivamente si existe efecto para esta variable 
+
+```{r}
+I = TukeyHSD(A)
+plot(I)
+```
+Esto nos indica que 0 y 100% remoto tienen el mismo efecto, y hibrido es el que se diferencia de esto. Esto respalda nuestro analisis previo.
+
+## CONCLUSION
+
+Los salarios para analistas de datos son altos incluso a niveles de experiencia bajos, y tambien concluimos que entre empresas medianas y grandes la unica diferencia real de salarios es en cuanto a la gran magnitud de varianza entre los salarios de los ejecutivos. El puesto, o nivel de experiencia, sin duda es el factor mas grande en cuanto al salario. En cuanto a la modalidad no pudimos tener un analisis completo debido a esto mismo, que las distribuciones de los puestos eran lo que mas influenciaban en el promedio de la modalidad.  Al igual, hay bastante diferencia entre paises en cuanto a salarios pero necesitamos mas informacion para aclarar eso mas concisamente, lo que queda claro es que Estados Unidos es definitivamente mejor pais para trabajar incluso que CA y GB. En general la demanda para analistas de datos esta incrementando ya que cada vez hay salarios mas altos a lo largo de los anios (2020/2021 -> 2022). 
+
+# REPOSITORIO
+Archivos Utilizados para este analisis: https://drive.google.com/drive/folders/16Y6_cbbXaWo_AuxQGE0QRvrL4VdnlmkS?usp=sharing
+Dentro de la carpeta "Salarios"
+
+
+## REFERENCIAS
+Data Science Job Salaries. (2022). Retrieved 15 September 2022, from https://www.kaggle.com/datasets/ruchi798/data-science-job-salaries 

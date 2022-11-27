@@ -1,0 +1,255 @@
+---
+title: "Reporte Series de Tiempo"
+author: "Nicolas Cardenas A01114959"
+date: "2022-11-17"
+output: pdf_document
+---
+
+Módulo 5: Estadística Avanzada para ciencia de datos y nombre de la concentración
+
+Grupo 502
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## RESUMEN
+En este reporte analizamos las ventas de televisores a lo largo del tiempo, utilizamos herramientas vistas en clase para descomponer esta serie de tiempo para poder observar comportamientos y convertir esta informacion a acciones que podrian ser buenos para el negocio. Utilizamos promedios moviles, los datos descompuestos y sin estacionalizacion para poder realizar un modelo que pueda hacer predicciones tomando en cuenta todos estos factores.
+
+Contamos con dos situaciones: una que es la venta de televisores y otra que es la ventas de libros para la escuela. Para ambas tenemos informacion de ventas por periodo.
+
+## INTRODUCCION
+
+Primero que nada tenemos que entender los datos. Tenemos las ventas en miles en cada de 4 semestres por 1 anio por 4 anios (total 16):
+```{r}
+v = c(4.8,4.1,6.0,6.5,5.8,5.2,6.8,7.4,6.0,5.6,7.5,7.8,6.3,5.9,8.0,8.4)
+t = 1:16
+plot(t,v, type="o")
+```
+
+## ANALISIS
+
+Lo mas importante de las ventas es descomponerlo en sus diferentes componentes (trend, seasonality, irregularity). Usaremos el tipo multiplicativo porque vemos que esta aumentando cada vez mas nuestra grafica.
+
+```{r}
+x= ts(v, frequency = 4, start(c(2016,1)))
+plot.ts(x, col = "red")
+T = decompose(x, type="multiplicative")
+plot(T, col ="blue")
+```
+Como podemos ver, los diferentes componentes nos cuentan mucho de como se comporta la compra y venta de televisores: la tendencia es que esta incrementando, y con nuestro ciclo vemos que hay estacionalidad de cuatro, observamos diferentes comportamientos para cada trimestre de ventas.
+
+```{r}
+T$seasonal
+```
+Podemos ver que son similares pero la mejor temporada es el Q4 mientras que la peor es el Q2
+
+
+# PREDICCIONES
+
+Primero veremos como se ve nuestra formula de regresion para observar el comportamiento:
+```{r}
+N = lm(v~t)
+plot(t, v, type= "l", col = "red")
+abline(N, col = "blue")
+N
+```
+
+Veremos ahora las ventas desestacionalizadas:
+```{r}
+ventas_desestacionalizadas = (T$x)/(T$seasonal)
+x3 = 1:16
+y3 = ventas_desestacionalizadas
+N3 = lm(y3~x3)
+N3
+plot(x3, y3, type = "l")
+abline(N3, col = "red")
+text(6, 7, " ventas = 5.1080 + 0.1474 trimestre")
+summary(N3)
+qqnorm(N3$residuals)
+qqline(N3$residuals)
+```
+Nuestras "predicciones" siguen siendo lineales.
+
+Con solo estos datos, incluso antes de volver la estacionalidad a nuestra predicciones, podemos ver que es un buen modelo. Tenemos que ambos coeficientes son significantes. Observamos normalidad en los residuos, y explica 92% de variabilidad el modelo. Es un buen modelo que servira.
+
+Hacemos predicciones y volvemos la estacionalidad para ver nuestros errores.
+```{r}
+f = function(x) {5.1080 + 0.1474*x}
+ee = NA
+epep = NA
+preds = NA
+c = 1
+
+for (tValue in t) {
+  real = v[tValue]
+  pred = f(tValue)*T$seasonal[c]
+  
+  if (c > 4) {
+    c = 1
+  }
+  preds[tValue] = pred
+  c = c + 1
+  error = real - pred
+  EPAM = abs(error / real)
+  
+  CME = error^2
+  ee[tValue] = CME
+  epep[tValue] = EPAM
+}
+
+print(mean(ee))
+print(mean(epep))
+
+plot(t, v, , type= "o", col = "blue")
+lines(t, preds, , type= "o", col = "red")
+```
+Desde esta grafica vemos que es un extremadamente buen modelo. Vemos que tanto el CME y el EPAM son extremadamente bajos, tenemos un excelente modelo.
+
+Predicciones para el proximo anio:
+```{r}
+f = function(x) {5.1080 + 0.1474*x}
+a1 = T$seasonal[1]
+a2 = T$seasonal[2]
+a3 = T$seasonal[3]
+a4 = T$seasonal[4];
+
+y = c(f(17)*a1, f(18)*a2, f(19)*a3,f(20)*a4)
+
+plot(seq(17,20), y , type = "o")
+```
+Aqui podemos notar el modelo y la estacionalizacion es su maximo esplendor, se nota el efecto en cada trimestre de nuestras predicciones.
+
+# COMPARACION
+
+A continuacion: haremos lo mismo que acabamos de hacer pero ahora utilizaremos el modelo de manera aditiva con el proposito de comparar modelos.
+
+```{r}
+T2 = decompose(x, type="additive")
+ventas_desestacionalizadas2 = (T2$x)/(T2$seasonal)
+x2 = 1:16
+y2 = ventas_desestacionalizadas2
+N2 = lm(y2~x2)
+N2
+plot(x2, y2, type = "l")
+abline(N2, col = "red")
+summary(N2)
+qqnorm(N2$residuals)
+qqline(N2$residuals)
+
+f2 = function(x) {-3.5443 + 0.4847*x}
+ee = NA
+epep = NA
+preds = NA
+
+for (tValue in t) {
+  real = v[tValue]
+  pred = f2(tValue)*T2$seasonal[c]
+  if (c > 4) {
+    c = 1
+  }
+  preds[tValue] = pred
+  c = c + 1
+  error = real - pred
+  EPAM = abs(error / real)
+  
+  CME = error^2
+  ee[tValue] = CME
+  epep[tValue] = EPAM
+}
+
+print(mean(ee))
+print(mean(epep))
+
+plot(t, v, , type= "o", col = "blue")
+lines(t, preds, , type= "o", col = "red")
+```
+
+Este nuevo modelo (aditivo) podemos ver tanto en las metricas (normalidad de residuos, R squared, etc.) Como en la grafica (que ni si quiera se observan las predicciones de lo malo que es el modelo) que es un modelo horrible. 
+
+## VENTA DE LIBROS:
+
+Ahora tenemos un set extra de datos de nuestro problema secundario: analizar los comportamientos de la venta de libros escolares.
+
+Esta es la informacion con la que contamos, igualmente esta divido por anio pero ahora son solo 3 anios (4 trimestres por anio).
+
+Aqui podemos ver los datos:
+```{r}
+pt = c(1690,1800,1850,940,900,1100,2625,2900,2930,2500,2360,2615)
+t2 = 1:12
+plot(t2,pt, type="o")
+```
+
+Haremos igualmente la decomposicion del modelo, usaremos modelo multiplicativo debido a que igualmente esta incrementando cada anio:
+```{r}
+x2 = ts(pt, frequency = 4, start(c(2016,1)))
+plot.ts(x2, col = "red")
+T3 = decompose(x2, type="multiplicative")
+plot(T3, col ="blue")
+T3$seasonal
+```
+Aqui observamos estacionalizacion mucho mas drastica y podemos hacer mas deducciones: Q3 tiene el mayor indice estacional, esto puede ser porque en verano cuando todos vuelven a clases y necesitan libros nuevos de nuevas materias. El mas bajo es justo despues de verano donde ya todos tienen sus libros, han empezado clases y ya no necesitan libros. Tiene mucho sentido lo que nos mencionan las graficas.
+
+# PROMEDIO MOVIL
+```{r}
+p = NA
+e = NA
+
+n = 12
+k = 4
+
+for(i in 1:(n-k)) {
+  p[i+k] =(pt[i]+pt[i+1]+pt[i+2]+pt[i+3])/k; e[i+k] = p[i+k] - pt[i+k]
+}
+
+#Suavizamiento por promedios móviles
+Te=data.frame(t2,p,pt,e^2)
+
+#Calcula el cuadrado medio del errores sin NA:
+CME=mean(e^2,na.rm=TRUE)
+
+plot(t2, pt, type="o", col="red")
+x = (k+1):n
+lines(x,p[x],type="o",col="blue")
+
+```
+Utilizando el promedio movil nos podemos dar una idea de como se esta comportando la serie de tiempo.
+
+
+# PROMEDIO MOVIL CENTRADO
+```{r}
+p2 = NA
+e2 = NA
+
+n = 12
+k = 4
+
+for(i in 1:(n-k)) {
+  p2[i+k]=(1/10)*pt[i]+(2/10)*pt[i+1]+(3/10)*pt[i+2]+(4/10)*pt[i+3]
+  e2[i+k] = p2[i+k] - pt[i+k]
+}
+
+#Suavizamiento por promedios móviles ponderados
+
+T2 =data.frame(t2,p2,pt,e2^2)
+
+#Calcula el cuadrado medio del errores sin NA:
+CME2=mean(e2^2,na.rm=TRUE)
+
+
+plot(t2, pt, type="o", col="red")
+x = (k+1):n
+lines(x,p2[x],type="o",col="blue")
+```
+El promedio centrado igualmente nos da una idea de como se esta comportando la serie de tiempo.
+
+## CONCLUSION
+
+Descomponer las series de tiempo en sus diferentes componentes resulta ser beneficiosos no solo en temas de negocios o ventas, si no tambien que se pueden aplicar en temperaturas, consumo de energia, entre otras cosas. Puede ser extremadamente util para estimar y podemos sacarle el maximo provecho a las series de tiempo. Con los analisis que hicimos hoy podemos tomar acciones para aumentar las ventas y poder maximizarlas. 
+
+## BIBLIOGRAFIA
+N / A
+
+## ANEXOS
+Drive: https://drive.google.com/drive/folders/16Y6_cbbXaWo_AuxQGE0QRvrL4VdnlmkS?usp=share_link 
+

@@ -1,0 +1,4 @@
+"0","numeric_vars = data[, unlist(lapply(data, is.numeric))]"
+"2","Error in data[, unlist(lapply(data, is.numeric))] : 
+  (subscript) logical subscript too long
+"

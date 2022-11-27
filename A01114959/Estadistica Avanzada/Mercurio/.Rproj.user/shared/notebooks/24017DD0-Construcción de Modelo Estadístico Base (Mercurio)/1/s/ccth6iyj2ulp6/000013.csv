@@ -1,0 +1,6 @@
+"0","#install.packages(""corrplot"")"
+"0","library(""corrplot"")"
+"0","#install.packages(""psych"")            # Install psych package"
+"0","library(""psych"")  "
+"2","Error in library(""psych"") : there is no package called ‘psych’
+"

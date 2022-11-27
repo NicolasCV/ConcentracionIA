@@ -1,0 +1,2 @@
+"0","M$edad <- Map(function(element) {ifelse(element == 1, 'joven','maduro')},M$madurez)"
+"0","edad = unlist(do.call(rbind.data.frame, M$edad))"

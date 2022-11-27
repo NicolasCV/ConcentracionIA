@@ -1,0 +1,21 @@
+"0","knitr::opts_chunk$set(echo = FALSE)"
+"0","tinytex::install_tinytex()"
+"2","Found 'C:\Users\omega\AppData\Local\Programs\MiKTeX\miktex\bin\x64\pdftex.exe', which indicates a LaTeX distribution may have existed in the system.
+"
+"0","y"
+"2","trying URL 'https://yihui.org/tinytex/TinyTeX-1.zip'
+"
+"2","Content type 'application/octet-stream'"
+"2"," length 109809678 bytes (104.7 MB)
+"
+"2","downloaded 104.7 MB
+
+"
+"1","3 File(s) copied
+"
+"1","1 File(s) copied
+"
+"1","Running fc-cache -v -r
+"
+"1","Warning: conflicting [pdf]tex program found on the system path in C:\Users\omega\AppData\Local\Programs\MiKTeX\miktex\bin\x64; not fixable in user mode.
+"

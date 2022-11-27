@@ -1,0 +1,300 @@
+---
+title: "Mercurio"
+author: "Nicolas Cardenas"
+date: "2022-09-05"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+
+## PROBLEMA
+# Overview
+La contaminación por mercurio de peces en el agua dulce comestibles es una amenaza directa contra nuestra salud. Se llevó a cabo un estudio reciente en 53 lagos de Florida con el fin de examinar los factores que influían en el nivel de contaminación por mercurio. Las variables que se midieron se encuentran en mercurio.csv  Descargar mercurio.csv  y su descripción es la siguiente: 
+
+X1 = número de indentificación
+X2 = nombre del lago
+X3 = alcalinidad (mg/l de carbonato de calcio)
+X4 = PH
+X5 = calcio (mg/l)
+X6 = clorofila (mg/l)
+X7 = concentración media de mercurio (parte por millón) en el tejido muscualar del grupo de peces estudiados en cada lago
+X8 = número de peces estudiados en el lago
+X9 = mínimo de la concentración de mercurio en cada grupo de peces
+X10 = máximo de la concentración de mercurio en cada grupo de peces
+X11 = estimación (mediante regresión) de la concentración de mercurio en el pez de 3 años (o promedio de mercurio cuando la edad no está disponible)
+X12 = indicador de la edad de los peces (0: jóvenes; 1: maduros)
+
+Es importante utilizar los datos que tenemos para poder ver que factores afectan el agua ya que el mercurio es una de las sustancias mas daninas para el cuerpo humano. Nos basaremos en los factores dentro del agua ya que son cosas que podemos alterar cientificamente con quimicos y reducir el nivel de mercurio de los lagos ya que los peces que habitan ahi son el alimento de los habitantes de Florida. [1]
+
+```{r}
+M <- read.csv('mercurio.csv')
+colnames(M) <- c("id", "nombre", "alcalinidad", "ph","calcio","clorofila","mediaMercurio","numPeces","minMercurio","maxMercurio","estimacion","madurez")
+
+id = M$id 
+nombre = M$nombre #CATEGORICA NOMINAL
+alcalinidad = M$alcalinidad #NUMERICA CONTINUA
+ph = M$ph #NUMERICA CONTINUA
+calcio = M$calcio #NUMERICA CONTINUA
+clorofila = M$clorofila #NUMERICA CONTINUA
+mediaMercurio = M$mediaMercurio #NUMERICA CONTINUA
+numPeces = M$numPeces #NUMERICA DISCRETA
+minMercurio = M$minMercurio #NUMERICA CONTINUA
+maxMercurio = M$maxMercurio #NUMERICA CONTINUA
+estimacion = M$estimacion #NUMERICA CONTINUA
+madurez = M$madurez #CATEGORICA ORDINAL
+
+#Sin ID y si Nombre
+Ma <- M[,c(-1,-2)]
+```
+
+# Resumen
+Para este analisis se busca contestar esta pregunta: Cuales son los factores principales que afectan los niveles de mercurio en los peces. Usaremos varios modelos y tecnicas aprendidas durante este curso junto con la informacion que se nos dio en forma de un Excel para hacer un analisis mas profundo utilizando estas herramientas. Primero hicimos una limpieza de datos y un analisis por encima de todas las variables. Procedimos a utilizar correlacion para ir empezando a contestar la pregunta, sin embargo, lo vimos a detalle con dos modelos: ANOVA y Regresion. Durante la realizacion de estos modelos encontramos mucha informacion interesante al respecto y terminamos con una transformacion de la Regresion Lineal para tener una Regresion Exponencial con las variables que SI tenian efecto. Por lo tanto, no solo averiguamos cuales eran los factores principales para los niveles de mercurio en los peces si no tambien obtuvimos un modelo preciso para estimar los niveles utilizando estas dos variables. Al final igualmente respaldamos nuestra investigacion estadisitca con investigacion cientifica para respaldar lo que encontramos.
+
+```{r}
+print("Informacion General de los datos")
+summary(Ma)
+print("Desviacion Estandar")
+apply(Ma,2,sd)
+```
+
+## LIMPIEZA
+A primer vistazo, no vemos ninguna discrepancia en los datos, todos los minimos y maximos se observan en orden, no hay datos duplicados, no hay N/A, la alcalinidad esta dentro de los rangos validos de la escala pH, asi que podemos proceder con un analisis general de los datos para empezar. 
+
+Lo unico que vamos a hacer es cambiar el dummy de joven y maduro (0 y 1) a una variable categorica para poder correr el anova test en el futuro.
+```{r}
+M$edad <- Map(function(element) {ifelse(element == 1, 'joven','maduro')},M$madurez)
+edad = unlist(do.call(rbind.data.frame, M$edad))
+```
+Conteo de valores nulos por columna, vemos que todos son 0 por lo cual no contamos con discrepancias.
+```{r}
+na_count <-sapply(Ma, function(y) sum(length(which(is.na(y)))))
+na_count
+```
+En cuanto a limpieza de datos atipicos/extremos los veremos en el analisis.
+
+## ANALISIS
+
+Para nuestra variable objetivo durante este analisis debemos primero determinar lo que nos pide el problema: medir los factores de de mercurio. Dentro de nuestra tabla tenemos varias variables para medir el nivel de mercurio: media, minimo, maximo, y la de estimacion. Primero que nada descartare la de estimacion ya que esa fue hecha con regresion lineal cuando no estaba la informacion en cuanto a la edad asi que esa ya contiene un grado de error, ademas utilizaron la media por lo tanto muestra alta correlacion con la media. Y es por esto que creo que debemos enfocarnos en la media de mercurio en los peces ya que esta nos da una cifra pero tambien nos puede dar un intervalo de confianza donde podemos poner la media de la poblacion. Al principio estaba debatiendo si analizar el maximo del mercurio ya que este es el que importa, no queremos que ningun pez sobresalga de el maximo permitido para la salud. Sin embargo, como vemos que hay una correlacion alta entre la media y el maximo en este caso, creo que la media nos brindaria mas informacion y podemos hacer inferencias del maximo, asimismo, no queremos que datos atipicos nos alteren el maximo y tengamos una percepcion alterada.
+
+```{r}
+hist(mediaMercurio)
+boxplot(mediaMercurio)
+```
+Vemos que en cuanto a la media de mercurio no hay datos atipicos, tenemos una distribucion bastante uniforme. No hay datos atipicos que tengamos que limpiar
+
+```{r}
+#Sin la media de mercurio y sin variables categoricas
+sinPredict <- Ma[-5,-10]
+```
+
+# Medias
+
+Ya que nuestra variable objetivo es la media del nivel del mercurio encontrado de los peces de ese lago, quisiera ver que tanto se relacion al numero de peces medidos. Lo primero que haremos es ver la grafica entre numPeces y la media de mercurio. 
+```{r}
+plot(numPeces,mediaMercurio)
+```
+No vemos un ningun tipo de correlacion entre estas o algun patron que podamos analizar lo cual es bueno, significa que no porque haya mas peces y la media sea mas precisa o cambie drasticamente.
+
+# Toxicidiad
+Antes de proceder a analizar cuales seran los factores principales en cuanto a toxicidad de mercurio en el agua, hay que observar la media en cuanto todos los lagos para ver si realmente es un problema que hay en Florida. Para esto utilizaremos los reglamentos internacionales CE 1881/2006 y Codex Standard 193-1995 que indican que la concentración promedio de mercurio en productos de la pesca no debe superar los 0.5 mg de Hg/kg.
+
+
+H0 = La media de la media de mercurio en los peces en lagos de Florida es < 0.5
+H1 = La media de la media de mercurio en los peces en lagos de Florida es > 0.5
+
+Para esta prueba de hipotesis utilizaremos un alpha de 0.05
+
+Para la distribucion opte por utilizar la t de student debido a que tenemos mas de 30 datos y no conocemos sigma. 
+
+Primero debemos encontrar t0.
+```{r}
+alfa = 0.05
+n = length(mediaMercurio)
+t0 = qt(alfa, n - 2)
+t0
+```
+Esta prueba es solo cola hacia la derecha ya que solo se rechaza si es mayor.
+
+Por lo tanto rechazaremos si:
+* Valor p es menor a  0.05
+* Si |t estrella| > | t0
+```{r}
+m = mean(mediaMercurio)
+s = sd(mediaMercurio)
+n = length(mediaMercurio)
+
+sig = s / sqrt(n) 
+
+miuHipotesis = 0.5
+testrella = (m - miuHipotesis) / sig
+testrella
+
+pvalue=2*pt(testrella,n-2)
+pvalue
+
+abs(testrella) > abs(t0)
+pvalue < 0.05
+```
+Vemos que el valor p no es menor que alfa y que testrella no es menor que el valor absoluto de t estrella no es tampoco entonces no rechazamos la hipotesis nula y que nuestra media si es menos de 0.5, por lo cual no hay cantidades de mercurio toxicas en promedio pero si se busca disminuir debemos encontrar que factores son los que aumentan esta toxicidad.
+
+Otra cosa que podriamos analizar que tambien considero que podria ser extremadamente util seria sacar el intervalo de la media para cada lago, para saber especificamente por lago que tan toxico es y no solo en promedio de Florida.
+
+
+# Correlacion
+```{r}
+#Matriz correlacion + pvalues
+library("Hmisc")
+res <- rcorr(as.matrix(Ma))
+res
+```
+
+```{r}
+#Con estas funciones nos damos una idea visual para poder ver cuales son las variables que mas tienen correlacion.
+symnum(res$r)
+library(corrplot)
+corrplot(res$r, type = "upper", order = "hclust", tl.col = "black", tl.srt = 45)
+library(PerformanceAnalytics)
+chart.Correlation(Ma, histogram=TRUE, pch=19)
+```
+Como podemos ver hay alta correlacion entre maxMercurio,minMercurio, mediaMercurio y tambien la estimacion lo cual no es sorprendente debido a que estoy van de la mano. Lo que si es interesante que el numero de peces tambien esta altamente correlacionado con esta cifra. Otra de las correlaciones medias-altas que observamos es el calcio con el ph y la clorofila con el ph.
+
+
+# Anova
+
+Primero que nada haremos una prueba de anova con la madurez de los peces, y como ya lo mencionamos antes usaremos el promedio de mercurio en los peces como variable dependiente. Haremos esto primero ya que es nuestra unica variable categorica.
+
+H0: No hay efecto debido a la edad en la media de los mercurio en los peces
+H1: Si hay efecto debido a la edad en la media de los mercurio en los peces
+
+Criterio de Rechazo P(F*>F0) < 0.05
+
+Primero veremos un boxplot representando la edad de los peces (joven,adulto)
+```{r}
+boxplot(mediaMercurio~edad)
+```
+Como podemos ver la media es similar en ambos, sin embargo se ven diferentes los diagramas en terminos de rangos intercuartiles, asi que procederemos con el ANOVA test.
+
+```{r}
+A<-aov(mediaMercurio~edad)
+summary(A)
+```
+Como podemos ver, vemos que no hay efecto. Pr>F es demasiado alta por lo tanto no rechazamos la hipotesis nula y concluimos que NO hay efecto. La edad es la unica variable categorica que podemos analizar con ANOVA. Por lo tanto utilizaremos otros metodos para analizar las otras variables.
+
+Ya sabemos que hay efecto pero igual para confirmar procederemos con un Turkey Test:
+```{r}
+I = TukeyHSD(aov(mediaMercurio ~ edad))
+plot(I)
+```
+El intervalo pasa por cero, lo cual me indica que son iguales y como lo mencionamos anteriormente no hay efecto.
+
+# Regresion Lineal
+Utilizando nuestra matriz anterior, haremos una regresion lineal para ver cuales variables tienen mayor efecto en nuestra variabla dependiente (media del mercurio)
+
+Como vimos en el diagrama de correlacion, observamos que el numPeces, maxMercurio,minMercurio, mediaMercurio y tambien la  son los que tienen correlacion mas alta. Sin embargo, el maximo y minimo de las medidas del mercurio no pueden ser realizadas para observar comportamiento diferente de la media ya que esta utilizaria datos que fueran parte del maximo y del minimo. Lo que se busca con esta investigacion es poder predecir y disminuir la media del mercurio con los factores que tenemos en el agua, determinar cuales son los factores y apartir de ahi tomar accion, por lo tanto no agregare las variables que forman parte de las medidas del mercurio ya que ya tenemos la media del mercurio como variable dependiente. Agregare ph, clorofila y alcalinidad ya que no fueron tan fuertemente correlacionados pero mostraron correlacion en todas las medidas del mercurio decente (0.5-0.6). Calcio no mostro mucha correlacion y aunque el numero de peces mostro mucha correlacion, no es factor en si afecta incrementa los niveles del mercurio ya que no es un factor ambiental, pero creo que si esta afectando nuestra media, analizaremos eso despues. Por ahora, meteremos todos los factores relevantes en cuanto al agua en el modelo.
+ 
+Antes de empezar a realizar los modelos me gustaria tener una funcion para tambien analizar los residuos:
+```{r}
+#Funcion para analisis
+analyzeResiduals <- function(A) {
+  shapiro.test(A$residuals)
+  qqnorm(A$residuals)
+  qqline(A$residuals)
+  hist(A$residuals,freq=FALSE)
+  lines(density(A$residual),col="red")
+  curve(dnorm(x,mean=mean(A$residuals),sd=sd(A$residuals)), from=-6, to=6, add=TRUE, col="blue",lwd=2)
+}
+```
+
+```{r}
+lr = lm(mediaMercurio~ph+alcalinidad+clorofila+calcio)
+summary(lr)
+analyzeResiduals(lr)
+```
+Como podemos ver, los unicos que si tienen efecto  en la media es la alcalinidad, sin embargo tenemos 2 variables que tambien tienen un valor p bajo, no abajo de nuestra alfa, pero considero que son importantes mantener. Por ahora quitaremos solo el que tuvo el valor p mas alto que fue el ph y cambiaremos el modelo para ver como interactua ahora. En cuanto a los residuos podemos ver que no se distribuyen normalmente, lo cual indica un mal modelo. Trataremos ahora de modelar con solo las variables que fueron lo suficientemente significativas:
+```{r}
+lr = lm(mediaMercurio~clorofila+alcalinidad+calcio)
+summary(lr)
+analyzeResiduals(lr)
+```
+Finalmente modelamos con solo nuestras variables que fueron significantes para obtener un nuevo modelo:
+
+```{r}
+lr = lm(mediaMercurio~clorofila+alcalinidad)
+summary(lr)
+analyzeResiduals(lr)
+```
+Como podemos ver el valor p para clorofila y alcalinidad son menores que nuestra alfa, indicando que si hay efecto, sin embargo, este modelo no lo esta modelando apropiadamente ya que tenemos una R^2 mas baja ahora.
+
+Antes de proceder, valdria la pena evaluar el modelo con clorofila y alcalinidad interactuando, para observar si es un mejor modelo:
+```{r}
+lr = lm(mediaMercurio~clorofila*alcalinidad)
+summary(lr)
+analyzeResiduals(lr)
+```
+
+Igualmente es un mal modelo. Los residuos de distribuyen de manera no formal. Todos nuestros en estos tres modelos muestran sesgo a la derecha y una curtosis positiva.
+
+Como nos dio un modelo peor que cuando no interactuaban, nos quedaremos con el modelo de alcalinidad+clorofila. 
+
+# Modelo
+Este modelo sigue siendo malo, sin embargo, no hay duda que hay efecto de estas dos variables en la media del mercurio, para esto vamos a analizar como se comporta la media con cada una de estas variables por separado.
+```{r}
+plot(alcalinidad,mediaMercurio)
+plot(clorofila,mediaMercurio)
+plot(calcio,mediaMercurio)
+plot(ph,mediaMercurio)
+```
+Como podemos ver la tendencia de estas dos variables no es linear. Se muestra como una exponencial decreciente con concava positiva (n^x). Esto explica porque el modelo no se ajusta bien a pesar de que si muestran efecto.
+
+Como lo que se busca encontrar en esta investigacion es cuales factores afectan el agua y no predecir los niveles de mercurio, no es necesario encontrar un modelo de mejor ajuste. Contamos ya con las variables que tienen efecto sobre la media de nivel de mercurio en los peces y podemos dar como concluida la investigacion.
+
+Sin embargo, si quisieramos construir un modelo para predecir la media del mercurio, podemos analizar como se comportarian estas variables con un modelo exponencial. 
+
+```{r}
+model <- lm(log(mediaMercurio)~ alcalinidad+clorofila)
+summary(model)
+analyzeResiduals(model)
+```
+Exito! El modelo contiene puras variables significantes y tenemos un R^2 de 0.68 lo cual es un modelo bueno, el mejor hasta ahora. Significa que podemos explicar 68.41% de la variacion por el modelo. La formula quedaria:
+  
+
+log(MEDIA DE MERCURIO) = -0.012912(clorofila) + -0.010729(alcalinidad) + -0.209275
+MEDIA DE MERCURIO =e^{-0.012912(clorofila)-0.010729(alcalinidad)-0.209275}
+
+
+No solo tenemos la mejor R^2 hasta ahora si no que tambien nuestros residuos parecen distribuirse de una manera mas normal. No es perfecto pero indica nuevamente que el mejor modelo hasta ahorita.
+
+Si quisieramos mejorar nuestro modelo para predecir, usariamos todas las variables, pero si utilizamos todos, las demas variables no tendrian efecto en la media pero mejoraria nuestra R^2. Solo como referencia haremos el analisis del modelo con todas las variables solo para tener el mejor modelo posible.
+
+```{r}
+model <- lm(log(mediaMercurio)~ alcalinidad+clorofila+ph+madurez+calcio)
+summary(model)
+```
+Vemos que la R^2 solo incremento por muy poco, el p-value para todas las que agregamos son muy bajos. Las incluimos en el modelo ya que en nuestro correlation chart vimos que ph y calcio tambien se mueven de manera similar a nuestras variables que si tienen efecto (exponencial). Este ultimo modelo puede ser ligeramente mejor que el otro pero con mas variables insignificantes lo cual tambien se tiene que considerar, por lo tanto el mejor modelo seria el anterior. 
+
+
+## CONCLUSION
+Lo que podemos asumir es que entre mas baja la alcalinidad y mas baja la clorofila, la media del mercurio suele ser mas alta, sin embargo, si la incrementamos por un poco baja drasticamente y despues a como vamos incrementando estas dos variables, la media del mercurio baja semi-constantemente. Por lo tanto, si quisieramos bajar el mercurio en los peces por la contaminacion debemos encargarnos de incrementar la clorofila y la alcalinidad. Esto es una buena indicacion ya que aumentar la clorofila y alcanlinidad por cantidades no muy grandes podemos disminuir mucho la media del mercurio. Podemos introducir quimicos para alterar estas propiedades en los lagos.
+
+Tras una investigacion en internet, encontramos que los niveles de alcalinidad bajos en el agua hace que el ph fluctue altamente en el agua que causa danos a todo lo que hace contacto con ella. Niveles de clorofila bajos indican que hay muy poca vida microscopica en el agua, que creo que tambien es senal de altos niveles de mercurio ya que indica que hay poca vida ahi, probablemente por la contaminacion que ya hay. [2, 3] Es importante respaldar nuestra investigacion estadistica con una cientifica para no solo confirmar pero tambien razonar y comparar los resultados.
+
+En conclusion, las caracteristicas del agua que mas suelen afectar los niveles de mercurio en el agua son la alcalinidad y la clorofila.
+
+## REPOSITORIO
+
+Archivos Utilizados para este analisis: https://drive.google.com/drive/folders/16Y6_cbbXaWo_AuxQGE0QRvrL4VdnlmkS?usp=sharing
+Dentro de la carpeta "Mercurio"
+
+## REFERENCIAS 
+[1] ¿Por qué el mercurio supone un riesgo sanitario?. (2022). Retrieved 14 September 2022, from https://www.mundodeportivo.com/vidae/salud/20220201/1001744736/mercurio-supone-riesgo-sanitario-act-pau.html
+
+[2] Retrieved 14 September 2022, from: https//hannainst.com.mx/blog/por-que-medir-la-alcalinidad-en-el-agua-potable/
+
+[3] Analisis clorofila a y feopigmentos en agua - Phytocontrol. (2021). Retrieved 14 September 2022, from https://www.phytocontrol.com/es/noticias/analisis-clorofila-a-y-feopigmentos-en-agua/
+
+
